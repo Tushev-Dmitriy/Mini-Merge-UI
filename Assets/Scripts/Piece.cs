@@ -2,12 +2,14 @@ using UnityEngine;
 using DG.Tweening;
 using UnityEngine.UI;
 
-public class Piece : MonoBehaviour
+public class Piece : MonoBehaviour, ICustomDraggable
 {
-    private Vector3 _startPosition;
+    private Vector2 _startAnchoredPos;
     private Transform _originalParent;
     private bool _isDragging;
-    private Camera _mainCamera;
+    private RectTransform _rectTransform;
+    private Canvas _canvas;
+    private RectTransform _dragParent;
 
     [Header("Текущий уровень")]
     public PieceLevelSO CurrentLevelSO;
@@ -15,55 +17,92 @@ public class Piece : MonoBehaviour
     private const float ScaleFactor = 1.3f;
     private const float ScaleDuration = 0.2f;
 
-    private void Awake()
+    private void Start()
     {
-        _mainCamera = Camera.main;
-    }
+        _rectTransform = GetComponent<RectTransform>();
 
-    private void OnMouseDown()
-    {
-        _startPosition = transform.position;
-        _originalParent = transform.parent;
-        _isDragging = true;
-        transform.SetParent(null);
+        _canvas = GetComponentInParent<Canvas>();
+        if (_canvas == null)
+        {
+            Debug.LogError("Piece должен быть внутри Canvas!");
+            return;
+        }
+
+        //Дочерний элемент Canvas с индексом 1 - dragParent
+        if (_canvas.transform.childCount > 1)
+            _dragParent = _canvas.transform.GetChild(1) as RectTransform;
+        else
+            _dragParent = _canvas.transform as RectTransform;
     }
 
     private void Update()
     {
-        HandleDrag();
-        HandleRelease();
-    }
+        if (!_isDragging || _canvas == null) return;
 
-    private void HandleDrag()
-    {
-        if (!_isDragging) return;
+        OnDrag();
 
 #if UNITY_ANDROID
-        if (Input.touchCount > 0)
-        {
-            Touch touch = Input.GetTouch(0);
-            Vector3 worldPos = _mainCamera.ScreenToWorldPoint(touch.position);
-            worldPos.z = 0;
-            transform.position = worldPos;
-        }
+        if (Input.touchCount == 0 || Input.GetTouch(0).phase == TouchPhase.Ended)
+            OnDragEnd();
 #else
-        Vector3 mousePos = Input.mousePosition;
-        mousePos.z = 0;
-        transform.position = _mainCamera.ScreenToWorldPoint(mousePos);
+        if (Input.GetMouseButtonUp(0))
+            OnDragEnd();
 #endif
     }
 
-    private void HandleRelease()
+    private void OnMouseDown()
     {
-        if (!_isDragging) return;
+        OnDragStart();
+    }
+
+    public void OnDragStart()
+    {
+        _startAnchoredPos = _rectTransform.anchoredPosition;
+        _originalParent = _rectTransform.parent;
+        _isDragging = true;
+
+        //Временный родитель dragParent, чтобы кусочек был над всеми
+        if (_dragParent != null)
+            _rectTransform.SetParent(_dragParent, true);
+
+        _rectTransform.SetAsLastSibling();
+
+        //z всегда = 1
+        Vector3 pos = _rectTransform.localPosition;
+        pos.z = 1f;
+        _rectTransform.localPosition = pos;
+    }
+
+    public void OnDrag()
+    {
+        if (_canvas == null) return;
+
+        Vector2 localPoint;
 
 #if UNITY_ANDROID
         if (Input.touchCount == 0) return;
-        if (Input.GetTouch(0).phase != TouchPhase.Ended) return;
+        Touch touch = Input.GetTouch(0);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvas.transform as RectTransform, touch.position,
+            _canvas.renderMode == RenderMode.ScreenSpaceCamera ? _canvas.worldCamera : null,
+            out localPoint);
 #else
-        if (!Input.GetMouseButtonUp(0)) return;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvas.transform as RectTransform, Input.mousePosition,
+            _canvas.renderMode == RenderMode.ScreenSpaceCamera ? _canvas.worldCamera : null,
+            out localPoint);
 #endif
 
+        _rectTransform.anchoredPosition = localPoint;
+
+        //z = 1
+        _rectTransform.localPosition = new Vector3(_rectTransform.localPosition.x,
+                                                   _rectTransform.localPosition.y,
+                                                   1f);
+    }
+
+    public void OnDragEnd()
+    {
         _isDragging = false;
 
         Cell targetCell = GetCellUnderMouse();
@@ -90,15 +129,17 @@ public class Piece : MonoBehaviour
 
     private void ReturnToStart()
     {
-        transform.SetParent(_originalParent);
-        transform.localPosition = Vector3.zero;
+        _rectTransform.SetParent(_originalParent, true);
+        _rectTransform.anchoredPosition = _startAnchoredPos;
+        _rectTransform.localPosition = new Vector3(_rectTransform.localPosition.x,
+                                                   _rectTransform.localPosition.y,
+                                                   0f);
     }
 
     private void Merge(Cell cell, Piece otherPiece)
     {
         if (CurrentLevelSO.NextLevelSO == null)
         {
-            //Максимальный уровень
             ReturnToStart();
             return;
         }
@@ -111,20 +152,18 @@ public class Piece : MonoBehaviour
         Destroy(otherPiece.gameObject);
         Destroy(gameObject);
 
-        //Анимация dotween
-        newPiece.transform.localScale = Vector3.zero;
+        //DOTween анимация
+        RectTransform newRect = newPiece.GetComponent<RectTransform>();
+        newRect.localScale = Vector3.zero;
         Sequence seq = DOTween.Sequence();
-        seq.Append(newPiece.transform.DOScale(Vector3.one * ScaleFactor, ScaleDuration));
-        seq.Append(newPiece.transform.DOScale(Vector3.one, ScaleDuration));
-        seq.Join(newPiece.transform.DOPunchScale(Vector3.one * 0.1f, 0.3f, 1));
+        seq.Append(newRect.DOScale(Vector3.one * ScaleFactor, ScaleDuration));
+        seq.Append(newRect.DOScale(Vector3.one, ScaleDuration));
+        seq.Join(newRect.DOPunchScale(Vector3.one * 0.1f, 0.3f, 1));
 
         Image img = newPiece.GetComponent<Image>();
         if (img != null)
-        {
             seq.Join(img.DOFade(1f, 0.5f));
-        }
 
-        //Установка данных для новой фишки
         Piece newPieceScript = newPiece.GetComponent<Piece>();
         if (newPieceScript != null)
         {
@@ -142,7 +181,7 @@ public class Piece : MonoBehaviour
         foreach (var cell in allCells)
         {
             RectTransform rect = cell.GetComponent<RectTransform>();
-            Vector3 screenPos = RectTransformUtility.WorldToScreenPoint(_mainCamera, rect.position);
+            Vector3 screenPos = RectTransformUtility.WorldToScreenPoint(_canvas.worldCamera ?? Camera.main, rect.position);
 #if UNITY_ANDROID
             Vector2 pointerPos = Input.touchCount > 0 ? (Vector2)Input.GetTouch(0).position : Vector2.zero;
 #else

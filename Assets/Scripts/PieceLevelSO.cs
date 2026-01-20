@@ -8,4 +8,7 @@ public class PieceLevelSO : ScriptableObject
 
     [Header("Префаб для этого уровня")]
     public GameObject Prefab;
+
+    [Header("Следующий уровень фишки")]
+    public PieceLevelSO NextLevelSO;
 }

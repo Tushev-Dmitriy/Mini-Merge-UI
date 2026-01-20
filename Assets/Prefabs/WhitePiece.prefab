@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 1949783842087614431}
   - component: {fileID: 7888261307053699001}
   - component: {fileID: 988623616951633622}
+  - component: {fileID: -8347001360515029155}
   m_Layer: 5
   m_Name: WhitePiece
   m_TagString: Untagged
@@ -75,3 +76,16 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &-8347001360515029155
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8943078577099452045}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bac0f6c693d14840aaeb3167094b95f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CurrentLevelSO: {fileID: 11400000, guid: 6e21aacec3de0e946aab662ce9e06e2d, type: 2}

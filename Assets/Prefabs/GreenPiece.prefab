@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 5373649090000481192}
   - component: {fileID: 1449839742987416418}
   - component: {fileID: 6667847301962631897}
+  - component: {fileID: 422060442166835335}
   m_Layer: 5
   m_Name: GreenPiece
   m_TagString: Untagged
@@ -75,3 +76,16 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &422060442166835335
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6716443587570213515}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bac0f6c693d14840aaeb3167094b95f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CurrentLevelSO: {fileID: 11400000, guid: c8705aab2bc8504498b723c8e057b81e, type: 2}

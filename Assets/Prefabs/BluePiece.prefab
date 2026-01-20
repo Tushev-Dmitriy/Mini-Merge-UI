@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 205160248122265607}
   - component: {fileID: 3481121958364061671}
   - component: {fileID: 8180332340700798259}
+  - component: {fileID: -7847987216164484680}
   m_Layer: 5
   m_Name: BluePiece
   m_TagString: Untagged
@@ -75,3 +76,17 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &-7847987216164484680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1393738205106060705}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bac0f6c693d14840aaeb3167094b95f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CurrentLevelSO: {fileID: 11400000, guid: 3c8260d2f25c37a44970b3cd92824576, type: 2}
+  AllLevelsSO: []

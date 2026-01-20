@@ -11,33 +11,28 @@ public class Piece : MonoBehaviour, ICustomDraggable
     private Canvas _canvas;
     private RectTransform _dragParent;
 
-    [Header("Текущий уровень")]
     public PieceLevelSO CurrentLevelSO;
+    public Cell CurrentCell { get; private set; }
 
     private const float ScaleFactor = 1.3f;
     private const float ScaleDuration = 0.2f;
 
+    //Инициализия ссылок на RectTransform, Canvas и dragParent
     private void Start()
     {
         _rectTransform = GetComponent<RectTransform>();
-
         _canvas = GetComponentInParent<Canvas>();
-        if (_canvas == null)
-        {
-            Debug.LogError("Piece должен быть внутри Canvas!");
-            return;
-        }
 
-        //Дочерний элемент Canvas с индексом 1 - dragParent
         if (_canvas.transform.childCount > 1)
             _dragParent = _canvas.transform.GetChild(1) as RectTransform;
         else
             _dragParent = _canvas.transform as RectTransform;
     }
 
+    //Обработка перетаскивания и отпускания фишки
     private void Update()
     {
-        if (!_isDragging || _canvas == null) return;
+        if (!_isDragging) return;
 
         OnDrag();
 
@@ -50,151 +45,167 @@ public class Piece : MonoBehaviour, ICustomDraggable
 #endif
     }
 
+    //Начало drag по клику мыши
     private void OnMouseDown()
     {
         OnDragStart();
     }
 
+    //Сохранение стартовой позиции и перенос фишки в dragParent
     public void OnDragStart()
     {
         _startAnchoredPos = _rectTransform.anchoredPosition;
         _originalParent = _rectTransform.parent;
         _isDragging = true;
 
-        //Временный родитель dragParent, чтобы кусочек был над всеми
-        if (_dragParent != null)
-            _rectTransform.SetParent(_dragParent, true);
+        if (CurrentCell != null) CurrentCell.ClearPiece();
 
+        _rectTransform.SetParent(_dragParent, true);
         _rectTransform.SetAsLastSibling();
-
-        //z всегда = 1
-        Vector3 pos = _rectTransform.localPosition;
-        pos.z = 1f;
-        _rectTransform.localPosition = pos;
+        SetZ(1f);
     }
 
+    //Движение фишки за курсором
     public void OnDrag()
     {
-        if (_canvas == null) return;
-
         Vector2 localPoint;
 
-#if UNITY_ANDROID
-        if (Input.touchCount == 0) return;
-        Touch touch = Input.GetTouch(0);
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            _canvas.transform as RectTransform, touch.position,
+            _canvas.transform as RectTransform,
+            Input.mousePosition,
             _canvas.renderMode == RenderMode.ScreenSpaceCamera ? _canvas.worldCamera : null,
             out localPoint);
-#else
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            _canvas.transform as RectTransform, Input.mousePosition,
-            _canvas.renderMode == RenderMode.ScreenSpaceCamera ? _canvas.worldCamera : null,
-            out localPoint);
-#endif
 
         _rectTransform.anchoredPosition = localPoint;
-
-        //z = 1
-        _rectTransform.localPosition = new Vector3(_rectTransform.localPosition.x,
-                                                   _rectTransform.localPosition.y,
-                                                   1f);
+        SetZ(1f);
     }
 
+    //Определение куда отпустили фишку и выбор действия
     public void OnDragEnd()
     {
         _isDragging = false;
 
         Cell targetCell = GetCellUnderMouse();
-        if (targetCell == null)
+
+        if (targetCell == null || targetCell == CurrentCell)
         {
-            ReturnToStart();
+            ReturnToCell();
             return;
         }
 
         if (targetCell.IsEmpty())
         {
-            targetCell.SetPiece(gameObject);
+            MoveToCell(targetCell);
         }
-        else if (targetCell.CurrentPiece.TryGetComponent<Piece>(out var otherPiece) &&
-                 otherPiece.CurrentLevelSO.Level == CurrentLevelSO.Level)
+        else if (targetCell.CurrentPiece.TryGetComponent(out Piece other) &&
+                 other.CurrentLevelSO.Level == CurrentLevelSO.Level)
         {
-            Merge(targetCell, otherPiece);
+            Merge(targetCell, other);
         }
         else
         {
-            ReturnToStart();
+            ReturnToCell();
         }
     }
 
-    private void ReturnToStart()
+    //Перемещение фишки в новую клетку
+    private void MoveToCell(Cell cell)
     {
-        _rectTransform.SetParent(_originalParent, true);
-        _rectTransform.anchoredPosition = _startAnchoredPos;
-        _rectTransform.localPosition = new Vector3(_rectTransform.localPosition.x,
-                                                   _rectTransform.localPosition.y,
-                                                   0f);
+        cell.SetPiece(gameObject);
+        CurrentCell = cell;
+        SetZ(0f);
     }
 
-    private void Merge(Cell cell, Piece otherPiece)
+    //Возвращение фишки обратно в текущую клетку
+    private void ReturnToCell()
+    {
+        if (CurrentCell != null)
+        {
+            CurrentCell.SetPiece(gameObject);
+        }
+        else
+        {
+            _rectTransform.SetParent(_originalParent, false);
+            _rectTransform.anchoredPosition = _startAnchoredPos;
+            SetZ(0f);
+        }
+    }
+
+    //Объединение двух фишек одинакового уровня
+    private void Merge(Cell cell, Piece other)
     {
         if (CurrentLevelSO.NextLevelSO == null)
         {
-            ReturnToStart();
+            ReturnToCell();
             return;
         }
 
-        GameObject newPiece = Instantiate(CurrentLevelSO.NextLevelSO.Prefab, cell.transform.position, Quaternion.identity);
-        newPiece.tag = $"Piece_{CurrentLevelSO.NextLevelSO.Level}";
+        GameObject newPiece =
+            Instantiate(CurrentLevelSO.NextLevelSO.Prefab, cell.transform);
 
         cell.SetPiece(newPiece);
 
-        Destroy(otherPiece.gameObject);
+        Destroy(other.gameObject);
         Destroy(gameObject);
 
-        //DOTween анимация
-        RectTransform newRect = newPiece.GetComponent<RectTransform>();
-        newRect.localScale = Vector3.zero;
-        Sequence seq = DOTween.Sequence();
-        seq.Append(newRect.DOScale(Vector3.one * ScaleFactor, ScaleDuration));
-        seq.Append(newRect.DOScale(Vector3.one, ScaleDuration));
-        seq.Join(newRect.DOPunchScale(Vector3.one * 0.1f, 0.3f, 1));
-
-        Image img = newPiece.GetComponent<Image>();
-        if (img != null)
-            seq.Join(img.DOFade(1f, 0.5f));
-
-        Piece newPieceScript = newPiece.GetComponent<Piece>();
-        if (newPieceScript != null)
-        {
-            newPieceScript.CurrentLevelSO = CurrentLevelSO.NextLevelSO;
-            newPieceScript.CurrentLevelSO.NextLevelSO = CurrentLevelSO.NextLevelSO.NextLevelSO;
-        }
+        AnimateMerge(newPiece.GetComponent<RectTransform>());
     }
 
+    //Анимация объединения
+    private void AnimateMerge(RectTransform rect)
+    {
+        rect.DOKill(true);
+
+        rect.localScale = Vector3.one;
+
+        Sequence seq = DOTween.Sequence();
+        seq.Append(rect.DOScale(Vector3.one * ScaleFactor, ScaleDuration)
+                       .SetEase(Ease.OutBack));
+        seq.Append(rect.DOScale(Vector3.one, ScaleDuration)
+                       .SetEase(Ease.OutQuad));
+
+        seq.OnComplete(() =>
+        {
+            rect.localScale = Vector3.one;
+        });
+    }
+
+    //Принудительная z позиция
+    private void SetZ(float z)
+    {
+        Vector3 pos = _rectTransform.localPosition;
+        pos.z = z;
+        _rectTransform.localPosition = pos;
+    }
+
+    //Поиск ближайшей клетки под курсором
     private Cell GetCellUnderMouse()
     {
-        Cell[] allCells = FindObjectsOfType<Cell>();
-        float minDistance = float.MaxValue;
-        Cell closestCell = null;
+        Cell[] cells = FindObjectsOfType<Cell>();
+        Vector2 pointer = Input.mousePosition;
 
-        foreach (var cell in allCells)
+        float min = float.MaxValue;
+        Cell closest = null;
+
+        foreach (var cell in cells)
         {
-            RectTransform rect = cell.GetComponent<RectTransform>();
-            Vector3 screenPos = RectTransformUtility.WorldToScreenPoint(_canvas.worldCamera ?? Camera.main, rect.position);
-#if UNITY_ANDROID
-            Vector2 pointerPos = Input.touchCount > 0 ? (Vector2)Input.GetTouch(0).position : Vector2.zero;
-#else
-            Vector2 pointerPos = Input.mousePosition;
-#endif
-            float distance = Vector2.Distance(pointerPos, screenPos);
-            if (distance < minDistance)
+            Vector2 screen =
+                RectTransformUtility.WorldToScreenPoint(_canvas.worldCamera, cell.transform.position);
+
+            float dist = Vector2.Distance(pointer, screen);
+            if (dist < min)
             {
-                minDistance = distance;
-                closestCell = cell;
+                min = dist;
+                closest = cell;
             }
         }
 
-        return minDistance < 100f ? closestCell : null;
+        return min < 100f ? closest : null;
+    }
+
+    //Обновление ссылки на текущую клетку
+    public void SetCurrentCell(Cell cell)
+    {
+        CurrentCell = cell;
     }
 }

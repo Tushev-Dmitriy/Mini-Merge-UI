@@ -7,6 +7,7 @@ public class GridManager : MonoBehaviour
     [Header("Все клетки на сцене")]
     public List<Cell> AllCells;
 
+    //Спавн новой фишки рандомно в одну из пустых клеток
     public void SpawnPiece(PieceLevelSO levelSO)
     {
         if (levelSO == null) return;
